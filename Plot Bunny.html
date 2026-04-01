@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plot Bunny</title>
+    <!-- favicon 将在脚本探测到后端端口后动态设置（避免端口自动切换导致失效） -->
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 980px;
+            margin: 24px auto;
+            padding: 0 16px;
+            display: grid;
+            gap: 16px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        h1, h2, h3 { margin-top: 0; }
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .format-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 18px;
+            margin-bottom: 10px;
+        }
+        .format-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .format-item label {
+            min-width: 120px;
+        }
+        .format-item-full {
+            grid-column: 1 / -1;
+            align-items: flex-start;
+        }
+        .series-color-settings {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 8px 14px;
+        }
+        .series-color-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .series-color-item span {
+            color: #111827;
+            font-size: 14px;
+        }
+        label { min-width: 120px; font-weight: 600; }
+        input[type="text"], input[type="number"], input[type="file"], input[type="color"], select {
+            padding: 8px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            min-width: 280px;
+        }
+        select[multiple] {
+            min-height: 130px;
+            padding: 6px;
+        }
+        button {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+        button:hover { background: #1e4fd8; }
+        .btn-secondary { background: #111827; }
+        .btn-secondary:hover { background: #0b1220; }
+        .btn-danger { background: #dc2626; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-icon { padding: 6px 10px; line-height: 1; }
+        .btn-icon[disabled] { opacity: 0.5; cursor: not-allowed; }
+        .y-group { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+        .y-groups { display: grid; gap: 8px; min-width: 280px; }
+        .y-group-row { display: flex; align-items: center; gap: 8px; }
+        .y-group-row select { min-width: 280px; }
+        .actions { display: flex; gap: 10px; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        pre {
+            background: #111827;
+            color: #d1fae5;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            min-height: 80px;
+        }
+        .hint { color: #374151; margin: 8px 0; }
+        #plot-frame {
+            margin-top: 10px;
+            width: 100%;
+            min-height: 560px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+        .format-panel {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            background: #fff;
+        }
+        .format-panel-summary {
+            cursor: pointer;
+            padding: 10px 12px;
+            background: #f9fafb;
+            font-weight: 600;
+            list-style: none;
+        }
+        .format-panel-summary::-webkit-details-marker { display: none; }
+        .format-panel-summary::before {
+            content: "▸";
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform 0.15s ease;
+            color: #6b7280;
+        }
+        .format-panel[open] .format-panel-summary::before {
+            transform: rotate(90deg);
+        }
+        .format-panel-hint {
+            font-weight: 400;
+            color: #6b7280;
+            margin-left: 6px;
+        }
+        .format-panel-body {
+            padding: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+        @media (max-width: 860px) {
+            .format-grid { grid-template-columns: 1fr; }
+        }
+        .page-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: #999;
+            font-size: 0.875rem; /* 14px */
+            line-height: 1.5;
+            padding-bottom: 10px;
+            background: transparent;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<main class="container">
+    <header class="card">
+        <h1>Plot Bunny</h1>
+        <div class="row" style="display:none;">
+            <label for="api-base">API 地址</label>
+            <input id="api-base" type="text" value="http://127.0.0.1:9876" />
+            <button id="btn-save-api">保存</button>
+        </div>
+    </header>
+
+    <section class="card" id="backend-status-card">
+        <h2>后端状态</h2>
+        <p id="backend-status-text" class="hint">正在检测后端服务…</p>
+        <div class="row" style="margin-bottom:0;">
+            <button type="button" id="btn-retry-backend" class="btn-secondary">重新检测</button>
+            <button type="button" id="btn-copy-health" class="btn-secondary">复制 health 地址</button>
+            <span id="backend-status-extra" class="hint" style="margin:0;"></span>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>上传数据</h2>
+        <form id="upload-form">
+            <div class="row">
+                <label for="dataset-name">数据集名称</label>
+                <input id="dataset-name" name="name" type="text" required />
+            </div>
+            <div class="row">
+                <label for="dataset-file">CSV/XLSX 文件</label>
+                <input id="dataset-file" name="file" type="file" accept=".csv,.xlsx" required />
+            </div>
+            <div class="row" id="sheet-row" style="display: none;">
+                <label for="sheet-name">Excel Sheet</label>
+                <select id="sheet-name" name="sheet_name"></select>
+            </div>
+            <button type="submit">上传并解析</button>
+        </form>
+        <p id="upload-message" class="hint"></p>
+        <h3>文件预览（前12行）</h3>
+        <p id="preview-message" class="hint"></p>
+        <table id="preview-table">
+            <thead></thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section class="card">
+        <details class="format-panel">
+            <summary class="format-panel-summary">数据集<span class="format-panel-hint">（可折叠）</span></summary>
+            <div class="format-panel-body">
+                <div class="row">
+                    <button id="refresh-datasets">刷新列表</button>
+                </div>
+                <table id="datasets-table">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>名称</th>
+                        <th>行数</th>
+                        <th>列数</th>
+                        <th>字段</th>
+                        <th>创建时间</th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </details>
+    </section>
+
+    <section class="card">
+        <h2>分析与作图</h2>
+        <p id="current-dataset-message" class="hint">当前数据集：未选择</p>
+        <h3>生成时间双Y轴曲线图</h3>
+        <div class="row">
+            <label for="time-column">时间列</label>
+            <select id="time-column"></select>
+        </div>
+        <div class="row">
+            <label for="left-y-column">左Y轴列(温度)</label>
+            <div class="y-group">
+                <div id="left-y-groups" class="y-groups"></div>
+                <button type="button" id="btn-add-left-group" class="btn-secondary">增加数据组</button>
+                <span class="hint" style="margin:0;">最多 10 组</span>
+            </div>
+        </div>
+        <div class="row">
+            <label for="right-y-column">右Y轴列(压力)</label>
+            <div class="y-group">
+                <div id="right-y-groups" class="y-groups"></div>
+                <button type="button" id="btn-add-right-group" class="btn-secondary">增加数据组</button>
+                <span class="hint" style="margin:0;">最多 10 组</span>
+            </div>
+        </div>
+        <details class="format-panel">
+            <summary class="format-panel-summary">图表格式<span class="format-panel-hint">（可折叠）</span></summary>
+            <div class="format-panel-body">
+        <div class="row">
+            <button type="button" id="btn-reset-chart-format">恢复默认格式</button>
+            <span class="hint" style="margin:0;">重置范围/刻度/颜色</span>
+        </div>
+        <p class="hint">留空=自动；时间范围需同时填起止。</p>
+        <div class="format-grid">
+            <div class="format-item format-item-full">
+                <label for="fmt-title">图表标题</label>
+                <input id="fmt-title" type="text" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-x-title">X轴标题</label>
+                <input id="fmt-x-title" type="text" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-left-title">左Y轴标题</label>
+                <input id="fmt-y-left-title" type="text" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-right-title">右Y轴标题</label>
+                <input id="fmt-y-right-title" type="text" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-x-min">时间轴下限</label>
+                <input id="fmt-x-min" type="text" placeholder="与数据时间格式一致" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-x-max">时间轴上限</label>
+                <input id="fmt-x-max" type="text" placeholder="与数据时间格式一致" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-x-dtick">时间刻度间隔(小时)</label>
+                <input id="fmt-x-dtick" type="number" step="any" min="0" placeholder="例如 6" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-left-min">左Y下限</label>
+                <input id="fmt-y-left-min" type="number" step="any" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-left-max">左Y上限</label>
+                <input id="fmt-y-left-max" type="number" step="any" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-left-dtick">左Y刻度间隔</label>
+                <input id="fmt-y-left-dtick" type="number" step="any" min="0" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-right-min">右Y下限</label>
+                <input id="fmt-y-right-min" type="number" step="any" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-right-max">右Y上限</label>
+                <input id="fmt-y-right-max" type="number" step="any" placeholder="可选" />
+            </div>
+            <div class="format-item">
+                <label for="fmt-y-right-dtick">右Y刻度间隔</label>
+                <input id="fmt-y-right-dtick" type="number" step="any" min="0" placeholder="可选" />
+            </div>
+            <div class="format-item format-item-full">
+                <label>曲线颜色设置</label>
+                <div>
+                    <p class="hint" style="margin:0 0 6px 0;">按曲线设置颜色</p>
+                    <div id="series-color-settings" class="series-color-settings"></div>
+                </div>
+            </div>
+        </div>
+            </div>
+        </details>
+        <button id="btn-plot">生成图表</button>
+        <p id="plot-message" class="hint"></p>
+        <iframe id="plot-frame" title="plot result"></iframe>
+    </section>
+</main>
+
+<footer class="page-footer">Copyright © 2026 Ada Shen. All Rights Reserved.</footer>
+
+<script>
+    const uploadForm = document.getElementById("upload-form");
+    const uploadMessage = document.getElementById("upload-message");
+    const datasetFileInput = document.getElementById("dataset-file");
+    const sheetRow = document.getElementById("sheet-row");
+    const sheetNameSelect = document.getElementById("sheet-name");
+    const previewMessage = document.getElementById("preview-message");
+    const previewTableHead = document.querySelector("#preview-table thead");
+    const previewTableBody = document.querySelector("#preview-table tbody");
+    const refreshDatasetsBtn = document.getElementById("refresh-datasets");
+    const datasetsTableBody = document.querySelector("#datasets-table tbody");
+    const currentDatasetMessage = document.getElementById("current-dataset-message");
+    const timeColumnSelect = document.getElementById("time-column");
+    const leftYGroupsEl = document.getElementById("left-y-groups");
+    const rightYGroupsEl = document.getElementById("right-y-groups");
+    const addLeftGroupBtn = document.getElementById("btn-add-left-group");
+    const addRightGroupBtn = document.getElementById("btn-add-right-group");
+    const plotMessage = document.getElementById("plot-message");
+    const plotFrame = document.getElementById("plot-frame");
+    const seriesColorSettings = document.getElementById("series-color-settings");
+    const apiBaseInput = document.getElementById("api-base");
+    const backendStatusText = document.getElementById("backend-status-text");
+    const backendStatusExtra = document.getElementById("backend-status-extra");
+    const retryBackendBtn = document.getElementById("btn-retry-backend");
+    const copyHealthBtn = document.getElementById("btn-copy-health");
+    let currentDatasetId = null;
+    let pendingFileNeedsUpload = false;
+    let currentColumns = [];
+    const MAX_Y_GROUPS = 10;
+    const DEFAULT_SERIES_COLORS = [
+        "#d62728",
+        "#1f77b4",
+        "#2ca02c",
+        "#9467bd",
+        "#ff7f0e",
+        "#17becf",
+        "#e377c2",
+        "#8c564b",
+        "#bcbd22",
+        "#7f7f7f"
+    ];
+    const seriesColorOverrides = {};
+
+    function getYGroupSelects(groupsEl) {
+        return Array.from(groupsEl.querySelectorAll("select[data-y-group]"));
+    }
+
+    function getYGroupValues(groupsEl) {
+        return getYGroupSelects(groupsEl)
+            .map((sel) => sel.value)
+            .filter((v) => v && String(v).trim() !== "");
+    }
+
+    function getAllSelectedSeriesColumns() {
+        const ordered = getYGroupValues(leftYGroupsEl).concat(getYGroupValues(rightYGroupsEl));
+        const seen = new Set();
+        return ordered.filter((col) => {
+            if (seen.has(col)) return false;
+            seen.add(col);
+            return true;
+        });
+    }
+
+    function getDefaultSeriesColor(column, index) {
+        return seriesColorOverrides[column] || DEFAULT_SERIES_COLORS[index % DEFAULT_SERIES_COLORS.length];
+    }
+
+    function buildSeriesColorMap() {
+        const cols = getAllSelectedSeriesColumns();
+        const map = {};
+        cols.forEach((col, idx) => {
+            map[col] = getDefaultSeriesColor(col, idx);
+        });
+        return map;
+    }
+
+    function renderSeriesColorSettings() {
+        const cols = getAllSelectedSeriesColumns();
+        if (!cols.length) {
+            seriesColorSettings.innerHTML = '<p class="hint" style="margin:0;">请先选择左右轴曲线列</p>';
+            return;
+        }
+        const html = cols.map((col, idx) => {
+            const color = getDefaultSeriesColor(col, idx);
+            return (
+                '<div class="series-color-item">' +
+                    '<span>' + col + '</span>' +
+                    '<input type="color" data-series-color="' + col + '" value="' + color + '" />' +
+                '</div>'
+            );
+        }).join("");
+        seriesColorSettings.innerHTML = html;
+        const inputs = seriesColorSettings.querySelectorAll('input[type="color"][data-series-color]');
+        for (const input of inputs) {
+            input.addEventListener("input", (e) => {
+                const col = e.target.getAttribute("data-series-color");
+                seriesColorOverrides[col] = e.target.value;
+            });
+        }
+    }
+
+    function buildPlotQueryParams(timeColumn, leftYColumns, rightYColumns) {
+        const params = new URLSearchParams();
+        params.set("time_column", timeColumn);
+        for (const col of leftYColumns) {
+            params.append("left_y_columns", col);
+        }
+        for (const col of rightYColumns) {
+            params.append("right_y_columns", col);
+        }
+        const chartTitle = document.getElementById("fmt-title").value.trim();
+        if (chartTitle) params.set("chart_title", chartTitle);
+        const xTitle = document.getElementById("fmt-x-title").value.trim();
+        if (xTitle) params.set("x_title", xTitle);
+        const yLeftTitle = document.getElementById("fmt-y-left-title").value.trim();
+        if (yLeftTitle) params.set("y_left_title", yLeftTitle);
+        const yRightTitle = document.getElementById("fmt-y-right-title").value.trim();
+        if (yRightTitle) params.set("y_right_title", yRightTitle);
+        const xMin = document.getElementById("fmt-x-min").value.trim();
+        const xMax = document.getElementById("fmt-x-max").value.trim();
+        if (xMin && xMax) {
+            params.set("x_min", xMin);
+            params.set("x_max", xMax);
+        } else if (xMin || xMax) {
+            throw new Error("时间轴下限与上限需同时填写或同时留空");
+        }
+        const xDtick = document.getElementById("fmt-x-dtick").value.trim();
+        if (xDtick !== "") {
+            const v = parseFloat(xDtick);
+            if (isNaN(v) || v <= 0) {
+                throw new Error("时间刻度间隔（小时）须为正数");
+            }
+            params.set("x_dtick_hours", String(v));
+        }
+        const ylMin = document.getElementById("fmt-y-left-min").value.trim();
+        const ylMax = document.getElementById("fmt-y-left-max").value.trim();
+        if (ylMin !== "" && ylMax !== "") {
+            params.set("y_left_min", ylMin);
+            params.set("y_left_max", ylMax);
+        } else if (ylMin || ylMax) {
+            throw new Error("左 Y 轴下限与上限需同时填写或同时留空");
+        }
+        const ylDtick = document.getElementById("fmt-y-left-dtick").value.trim();
+        if (ylDtick !== "") {
+            const v = parseFloat(ylDtick);
+            if (isNaN(v) || v <= 0) {
+                throw new Error("左 Y 轴刻度间隔须为正数");
+            }
+            params.set("y_left_dtick", String(v));
+        }
+        const yrMin = document.getElementById("fmt-y-right-min").value.trim();
+        const yrMax = document.getElementById("fmt-y-right-max").value.trim();
+        if (yrMin !== "" && yrMax !== "") {
+            params.set("y_right_min", yrMin);
+            params.set("y_right_max", yrMax);
+        } else if (yrMin || yrMax) {
+            throw new Error("右 Y 轴下限与上限需同时填写或同时留空");
+        }
+        const yrDtick = document.getElementById("fmt-y-right-dtick").value.trim();
+        if (yrDtick !== "") {
+            const v = parseFloat(yrDtick);
+            if (isNaN(v) || v <= 0) {
+                throw new Error("右 Y 轴刻度间隔须为正数");
+            }
+            params.set("y_right_dtick", String(v));
+        }
+        params.set("series_colors_json", JSON.stringify(buildSeriesColorMap()));
+        return params;
+    }
+
+    function resetChartFormatToDefaults() {
+        document.getElementById("fmt-title").value = "";
+        document.getElementById("fmt-x-title").value = "";
+        document.getElementById("fmt-y-left-title").value = "";
+        document.getElementById("fmt-y-right-title").value = "";
+        document.getElementById("fmt-x-min").value = "";
+        document.getElementById("fmt-x-max").value = "";
+        document.getElementById("fmt-x-dtick").value = "";
+        document.getElementById("fmt-y-left-min").value = "";
+        document.getElementById("fmt-y-left-max").value = "";
+        document.getElementById("fmt-y-left-dtick").value = "";
+        document.getElementById("fmt-y-right-min").value = "";
+        document.getElementById("fmt-y-right-max").value = "";
+        document.getElementById("fmt-y-right-dtick").value = "";
+        Object.keys(seriesColorOverrides).forEach((k) => delete seriesColorOverrides[k]);
+        renderSeriesColorSettings();
+    }
+
+    function resetAxisFormatToDefaults(axis) {
+        if (axis === "x") {
+            document.getElementById("fmt-x-min").value = "";
+            document.getElementById("fmt-x-max").value = "";
+            document.getElementById("fmt-x-dtick").value = "";
+            return;
+        }
+        if (axis === "left") {
+            document.getElementById("fmt-y-left-min").value = "";
+            document.getElementById("fmt-y-left-max").value = "";
+            document.getElementById("fmt-y-left-dtick").value = "";
+            return;
+        }
+        if (axis === "right") {
+            document.getElementById("fmt-y-right-min").value = "";
+            document.getElementById("fmt-y-right-max").value = "";
+            document.getElementById("fmt-y-right-dtick").value = "";
+        }
+    }
+
+    const DEFAULT_API_BASE = "http://127.0.0.1:9876";
+    // 同时兼容两种启动方式：
+    // - 桌面版（端口自动换）：9876~9895
+    // - 开发/脚本版（固定端口常用）：8001~8010
+    const CANDIDATE_PORTS = [
+        9876, 9877, 9878, 9879, 9880,
+        9881, 9882, 9883, 9884, 9885,
+        9886, 9887, 9888, 9889, 9890,
+        9891, 9892, 9893, 9894, 9895,
+        8001, 8002, 8003, 8004, 8005,
+        8006, 8007, 8008, 8009, 8010
+    ];
+    const FALLBACK_API_BASES = CANDIDATE_PORTS.flatMap((p) => [
+        "http://127.0.0.1:" + p,
+        "http://localhost:" + p
+    ]);
+    let backendBaseResolved = null;
+
+    function setFavicon(baseUrl) {
+        try {
+            const head = document.head || document.getElementsByTagName("head")[0];
+            let link = document.querySelector('link[rel="icon"]');
+            if (!link) {
+                link = document.createElement("link");
+                link.rel = "icon";
+                link.type = "image/png";
+                head.appendChild(link);
+            }
+            link.href = baseUrl.replace(/\/$/, "") + "/static/favicon.png";
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    function getApiBase() {
+        // 分发包默认固定本地后端地址，避免历史 localStorage 造成错连
+        const stored = localStorage.getItem("api_base");
+        return (stored || apiBaseInput.value.trim() || DEFAULT_API_BASE).trim();
+    }
+
+    function setFormsEnabled(enabled) {
+        try {
+            for (const el of document.querySelectorAll("input, select, button")) {
+                if (el && el.id === "btn-retry-backend") continue;
+                if (el && el.id === "btn-copy-health") continue;
+                // 保留后端状态区按钮可用
+            }
+            const inputs = uploadForm.querySelectorAll("input, select, button");
+            for (const el of inputs) el.disabled = !enabled;
+            document.getElementById("btn-plot").disabled = !enabled;
+            document.getElementById("refresh-datasets").disabled = !enabled;
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async function probeBackend() {
+        backendStatusExtra.textContent = "";
+        backendStatusText.textContent = "正在检测后端服务…";
+        setFormsEnabled(false);
+
+        const candidates = [DEFAULT_API_BASE].concat(FALLBACK_API_BASES.filter((x) => x !== DEFAULT_API_BASE));
+
+        async function tryHealth(base) {
+            const controller = new AbortController();
+            const t = setTimeout(() => controller.abort(), 700);
+            try {
+                const resp = await fetch(base.replace(/\/$/, "") + "/health", { signal: controller.signal });
+                if (resp.ok) return true;
+            } catch (e) {
+                // ignore
+            } finally {
+                clearTimeout(t);
+            }
+            return false;
+        }
+
+        for (const base of candidates) {
+            // 每个候选端口短暂重试几次，覆盖“刚启动”窗口
+            for (let i = 0; i < 3; i++) {
+                if (await tryHealth(base)) {
+                    backendBaseResolved = base.replace(/\/$/, "");
+                    localStorage.setItem("api_base", backendBaseResolved);
+                    apiBaseInput.value = backendBaseResolved;
+                    setFavicon(backendBaseResolved);
+                    backendStatusText.textContent = "已连接后端：" + backendBaseResolved;
+                    backendStatusExtra.textContent = "（端口自动适配）";
+                    setFormsEnabled(true);
+                    return true;
+                }
+                await new Promise((r) => setTimeout(r, 250));
+            }
+        }
+
+        backendBaseResolved = null;
+        backendStatusText.textContent =
+            "未检测到本机后端服务。请先启动 Plot Bunny（桌面版 exe 或本地脚本），再重试。";
+        backendStatusExtra.textContent =
+            "提示：桌面版端口通常为 9876~9895；开发/脚本版常见为 8001~8010。";
+        return false;
+    }
+
+    function normalizeApiBase(value) {
+        let v = value.trim();
+        if (!v) {
+            return DEFAULT_API_BASE;
+        }
+        if (!/^https?:\/\//i.test(v)) {
+            v = "http://" + v;
+        }
+        v = v.replace(/\/$/, "");
+        return v;
+    }
+
+    function saveApiBase() {
+        const value = normalizeApiBase(apiBaseInput.value);
+        localStorage.setItem("api_base", value);
+        apiBaseInput.value = value;
+    }
+
+    document.getElementById("btn-save-api").addEventListener("click", () => {
+        saveApiBase();
+        uploadMessage.textContent = "API 地址已保存";
+    });
+
+    async function requestJson(path, options = {}) {
+        if (!backendBaseResolved) {
+            await probeBackend();
+        }
+        if (!backendBaseResolved) {
+            throw new Error("无法连接后端 API（未检测到服务）。");
+        }
+        const base = backendBaseResolved.replace(/\/$/, "");
+
+        async function tryFetch(url) {
+            return await fetch(url, options);
+        }
+
+        async function sleep(ms) {
+            return await new Promise((r) => setTimeout(r, ms));
+        }
+
+        let lastErr = null;
+        // 先用当前 base，再按 fallback 列表尝试，并带短暂重试（解决后端刚启动还没 ready）
+        const candidates = [base].concat(FALLBACK_API_BASES.filter((x) => x.replace(/\/$/, "") !== base));
+        for (const cand of candidates) {
+            const candBase = cand.replace(/\/$/, "");
+            for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                    const resp = await tryFetch(candBase + path);
+                    // 命中可用地址后，固化到 localStorage（避免后续继续错连）
+                    localStorage.setItem("api_base", candBase);
+                    apiBaseInput.value = candBase;
+                    setFavicon(candBase);
+                    var response = resp; // eslint-disable-line no-var
+                    attempt = 999;
+                    break;
+                } catch (e) {
+                    lastErr = e;
+                    await sleep(400);
+                }
+            }
+            if (typeof response !== "undefined") break;
+        }
+
+        if (typeof response === "undefined") {
+            throw new Error(
+                "无法连接后端 API。请先启动 Plot Bunny（桌面版/脚本），再重试。\n\n" +
+                "可在浏览器尝试打开：\n" +
+                "http://127.0.0.1:9876/health（或 9877~9895）\n" +
+                "http://127.0.0.1:8001/health（或 8002~8010）"
+            );
+        }
+        const contentType = response.headers.get("content-type") || "";
+        const data = contentType.includes("application/json")
+            ? await response.json()
+            : await response.text();
+
+        if (!response.ok) {
+            const errorMessage = data && data.detail ? data.detail : (data || ("请求失败: " + response.status));
+            throw new Error(errorMessage);
+        }
+        return data;
+    }
+
+    function setText(el, text) {
+        el.textContent = text;
+    }
+
+    function setCurrentDataset(datasetId) {
+        currentDatasetId = datasetId;
+        if (currentDatasetId) {
+            currentDatasetMessage.textContent = "当前数据集：ID=" + currentDatasetId;
+        } else {
+            currentDatasetMessage.textContent = "当前数据集：未选择（请先上传数据）";
+        }
+    }
+
+    function buildOptionsHtml(columns) {
+        return columns.map((col) => "<option value=\"" + col + "\">" + col + "</option>").join("");
+    }
+
+    function createYGroupSelect(axis, optionsHtml) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "y-group-row";
+        const select = document.createElement("select");
+        select.setAttribute("data-y-group", axis);
+        select.innerHTML = optionsHtml;
+        select.addEventListener("change", () => {
+            resetAxisFormatToDefaults(axis === "left" ? "left" : "right");
+            renderSeriesColorSettings();
+        });
+        wrapper.appendChild(select);
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn-danger btn-icon";
+        removeBtn.textContent = "删除";
+        removeBtn.addEventListener("click", () => {
+            const groupsEl = axis === "left" ? leftYGroupsEl : rightYGroupsEl;
+            const rows = getYGroupSelects(groupsEl);
+            if (rows.length <= 1) return;
+            wrapper.remove();
+            updateRemoveButtonsState(groupsEl);
+            renderSeriesColorSettings();
+        });
+        wrapper.appendChild(removeBtn);
+        return { wrapper, select };
+    }
+
+    function updateRemoveButtonsState(groupsEl) {
+        const rows = Array.from(groupsEl.querySelectorAll(".y-group-row"));
+        const disable = rows.length <= 1;
+        for (const row of rows) {
+            const btn = row.querySelector("button.btn-danger");
+            if (btn) btn.disabled = disable;
+        }
+    }
+
+    function ensureAtLeastOneGroup(axis, groupsEl, optionsHtml, defaultValue) {
+        if (getYGroupSelects(groupsEl).length > 0) return;
+        const item = createYGroupSelect(axis, optionsHtml);
+        if (defaultValue) item.select.value = defaultValue;
+        groupsEl.appendChild(item.wrapper);
+        updateRemoveButtonsState(groupsEl);
+    }
+
+    function addYGroup(axis) {
+        const groupsEl = axis === "left" ? leftYGroupsEl : rightYGroupsEl;
+        const optionsHtml = buildOptionsHtml(currentColumns);
+        const count = getYGroupSelects(groupsEl).length;
+        if (count >= MAX_Y_GROUPS) {
+            setText(plotMessage, "最多只能添加 " + MAX_Y_GROUPS + " 个数据组");
+            return;
+        }
+        const item = createYGroupSelect(axis, optionsHtml);
+        const used = new Set(getYGroupValues(groupsEl));
+        const timeCol = timeColumnSelect.value;
+        const candidate = currentColumns.find((c) => c !== timeCol && !used.has(c));
+        if (candidate) item.select.value = candidate;
+        groupsEl.appendChild(item.wrapper);
+        updateRemoveButtonsState(groupsEl);
+        renderSeriesColorSettings();
+    }
+
+    function renderColumnSelects(columns) {
+        if (!columns || columns.length === 0) return;
+        currentColumns = columns.slice();
+        const html = buildOptionsHtml(columns);
+        timeColumnSelect.innerHTML = html;
+        const timeCandidate = columns.find((c) => /time|date|timestamp|时间/i.test(c)) || columns[0];
+        timeColumnSelect.value = timeCandidate;
+        leftYGroupsEl.innerHTML = "";
+        rightYGroupsEl.innerHTML = "";
+        const leftDefault =
+            columns.find((c) => /temp|temperature|温度/i.test(c) && c !== timeCandidate) ||
+            columns.find((c) => c !== timeCandidate) ||
+            "";
+        const rightDefault =
+            columns.find((c) => /press|pressure|压力/i.test(c) && c !== timeCandidate && c !== leftDefault) ||
+            columns.find((c) => c !== timeCandidate && c !== leftDefault) ||
+            "";
+        ensureAtLeastOneGroup("left", leftYGroupsEl, html, leftDefault);
+        ensureAtLeastOneGroup("right", rightYGroupsEl, html, rightDefault);
+        renderSeriesColorSettings();
+    }
+
+    function renderPreviewTable(columns, rows) {
+        previewTableHead.innerHTML = "";
+        previewTableBody.innerHTML = "";
+        if (!columns || columns.length === 0) {
+            previewMessage.textContent = "暂无预览数据";
+            return;
+        }
+        previewTableHead.innerHTML = "<tr>" + columns.map((c) => "<th>" + c + "</th>").join("") + "</tr>";
+        for (const row of rows) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = columns
+                .map((c) => "<td>" + (row[c] === null || row[c] === undefined ? "" : row[c]) + "</td>")
+                .join("");
+            previewTableBody.appendChild(tr);
+        }
+    }
+
+    function resetSheetSelector() {
+        sheetNameSelect.innerHTML = "";
+        sheetRow.style.display = "none";
+    }
+
+    async function previewCurrentFile() {
+        const file = datasetFileInput.files && datasetFileInput.files[0];
+        if (!file) {
+            previewMessage.textContent = "";
+            previewTableHead.innerHTML = "";
+            previewTableBody.innerHTML = "";
+            return;
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        if (file.name.toLowerCase().endsWith(".xlsx") && sheetNameSelect.value) {
+            formData.append("sheet_name", sheetNameSelect.value);
+        }
+        try {
+            const preview = await requestJson("/datasets/preview", {
+                method: "POST",
+                body: formData,
+            });
+            previewMessage.textContent = "预览成功（前12行）";
+            renderPreviewTable(preview.columns, preview.rows);
+            renderColumnSelects(preview.columns);
+        } catch (err) {
+            previewMessage.textContent = "预览失败: " + err.message;
+            previewTableHead.innerHTML = "";
+            previewTableBody.innerHTML = "";
+        }
+    }
+
+    async function detectExcelSheets() {
+        const file = datasetFileInput.files && datasetFileInput.files[0];
+        if (!file) {
+            resetSheetSelector();
+            return;
+        }
+        if (!file.name.toLowerCase().endsWith(".xlsx")) {
+            resetSheetSelector();
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+            const result = await requestJson("/datasets/excel/sheets", {
+                method: "POST",
+                body: formData,
+            });
+            sheetNameSelect.innerHTML = "";
+            for (const sheet of result.sheets) {
+                const option = document.createElement("option");
+                option.value = sheet;
+                option.textContent = sheet;
+                sheetNameSelect.appendChild(option);
+            }
+            sheetRow.style.display = "flex";
+            setText(uploadMessage, "已识别 Excel sheet: " + result.sheets.join(", "));
+            await previewCurrentFile();
+        } catch (err) {
+            resetSheetSelector();
+            setText(uploadMessage, "识别 sheet 失败: " + err.message);
+        }
+    }
+
+    async function loadDatasets() {
+        try {
+            const datasets = await requestJson("/datasets");
+            datasetsTableBody.innerHTML = "";
+            if (!currentDatasetId && datasets.length > 0) {
+                setCurrentDataset(datasets[0].id);
+            }
+            for (const item of datasets) {
+                const tr = document.createElement("tr");
+                tr.innerHTML =
+                    "<td>" + item.id + "</td>" +
+                    "<td>" + item.name + "</td>" +
+                    "<td>" + item.rows + "</td>" +
+                    "<td>" + item.cols + "</td>" +
+                    "<td>" + item.columns.join(", ") + "</td>" +
+                    "<td>" + item.created_at + "</td>";
+                datasetsTableBody.appendChild(tr);
+            }
+        } catch (err) {
+            setText(uploadMessage, "加载数据集失败: " + err.message);
+        }
+    }
+
+    uploadForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        uploadMessage.textContent = "正在上传...";
+        const formData = new FormData(uploadForm);
+        const file = datasetFileInput.files && datasetFileInput.files[0];
+        if (file && file.name.toLowerCase().endsWith(".xlsx") && sheetNameSelect.value) {
+            formData.set("sheet_name", sheetNameSelect.value);
+        } else {
+            formData.delete("sheet_name");
+        }
+        try {
+            const result = await requestJson("/datasets/upload", {
+                method: "POST",
+                body: formData,
+            });
+            setText(uploadMessage, "上传成功: ID=" + result.id + ", 行数=" + result.rows + ", 列数=" + result.cols);
+            setCurrentDataset(result.id);
+            pendingFileNeedsUpload = false;
+            renderColumnSelects(result.columns);
+            await loadDatasets();
+        } catch (err) {
+            setText(uploadMessage, "上传失败: " + err.message);
+        }
+    });
+
+    datasetFileInput.addEventListener("change", async () => {
+        pendingFileNeedsUpload = !!(datasetFileInput.files && datasetFileInput.files[0]);
+        if (pendingFileNeedsUpload) {
+            setCurrentDataset(null);
+        }
+        await detectExcelSheets();
+        await previewCurrentFile();
+    });
+    sheetNameSelect.addEventListener("change", previewCurrentFile);
+
+    refreshDatasetsBtn.addEventListener("click", loadDatasets);
+
+    document.getElementById("btn-reset-chart-format").addEventListener("click", () => {
+        resetChartFormatToDefaults();
+        setText(plotMessage, "已恢复默认图表格式");
+    });
+    timeColumnSelect.addEventListener("change", () => {
+        resetAxisFormatToDefaults("x");
+        setText(plotMessage, "已切换时间列：时间轴格式已恢复默认");
+    });
+    addLeftGroupBtn.addEventListener("click", () => addYGroup("left"));
+    addRightGroupBtn.addEventListener("click", () => addYGroup("right"));
+
+    document.getElementById("btn-plot").addEventListener("click", async () => {
+        const timeColumn = timeColumnSelect.value;
+        const leftYColumns = getYGroupValues(leftYGroupsEl);
+        const rightYColumns = getYGroupValues(rightYGroupsEl);
+        if (!currentDatasetId) {
+            setText(plotMessage, "请先点击“上传数据”生成数据集后再作图");
+            return;
+        }
+        if (pendingFileNeedsUpload) {
+            setText(plotMessage, "检测到你已选择新文件，请先上传该文件后再作图");
+            return;
+        }
+        if (!timeColumn || leftYColumns.length === 0 || rightYColumns.length === 0) {
+            setText(plotMessage, "请选择时间列与左右轴列（左右轴至少各1列）");
+            return;
+        }
+        if (leftYColumns.includes(timeColumn) || rightYColumns.includes(timeColumn)) {
+            setText(plotMessage, "时间列不能与任一Y轴列相同");
+            return;
+        }
+        const duplicates = leftYColumns.filter((col) => rightYColumns.includes(col));
+        if (duplicates.length > 0) {
+            setText(plotMessage, "左右Y轴列不能重复: " + duplicates.join(", "));
+            return;
+        }
+        let query;
+        try {
+            query = buildPlotQueryParams(timeColumn, leftYColumns, rightYColumns);
+        } catch (e) {
+            setText(plotMessage, e.message || String(e));
+            return;
+        }
+        try {
+            const result = await requestJson(
+                "/analysis/" + currentDatasetId + "/plot/time-dual-axis?" + query.toString(),
+                { method: "POST" }
+            );
+            setText(plotMessage, "图表生成成功: " + result.output_path);
+            plotFrame.src = getApiBase().replace(/\/$/, "") + "/" + result.output_path + "?t=" + Date.now();
+        } catch (err) {
+            setText(plotMessage, "图表生成失败: " + err.message);
+            plotFrame.removeAttribute("src");
+        }
+    });
+
+    // 初始化：先用默认端口；首次成功请求后 requestJson 会固化正确端口
+    apiBaseInput.value = DEFAULT_API_BASE;
+    localStorage.setItem("api_base", DEFAULT_API_BASE);
+    setFavicon(DEFAULT_API_BASE);
+    retryBackendBtn.addEventListener("click", probeBackend);
+    copyHealthBtn.addEventListener("click", async () => {
+        const base = backendBaseResolved || DEFAULT_API_BASE;
+        const text = base.replace(/\/$/, "") + "/health";
+        try {
+            await navigator.clipboard.writeText(text);
+            backendStatusExtra.textContent = "已复制：" + text;
+        } catch (e) {
+            backendStatusExtra.textContent = "复制失败，请手动复制：" + text;
+        }
+    });
+
+    probeBackend().then(() => {
+        loadDatasets();
+        renderSeriesColorSettings();
+    });
+</script>
+</body>
+</html>
