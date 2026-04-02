@@ -195,6 +195,11 @@
 
     <section class="card">
         <h2>上传数据</h2>
+        <div class="row" id="desktop-file-row" style="display:none;">
+            <label>数据文件</label>
+            <button type="button" id="btn-pick-file" class="btn-secondary">选择文件</button>
+            <span id="desktop-file-path" class="hint" style="margin:0;"></span>
+        </div>
         <form id="upload-form">
             <div class="row">
                 <label for="dataset-name">数据集名称</label>
@@ -367,6 +372,9 @@
     const plotFrame = document.getElementById("plot-frame");
     const seriesColorSettings = document.getElementById("series-color-settings");
     const apiBaseInput = document.getElementById("api-base");
+    const desktopFileRow = document.getElementById("desktop-file-row");
+    const pickFileBtn = document.getElementById("btn-pick-file");
+    const desktopFilePathSpan = document.getElementById("desktop-file-path");
     const backendStatusText = document.getElementById("backend-status-text");
     const backendStatusExtra = document.getElementById("backend-status-extra");
     const retryBackendBtn = document.getElementById("btn-retry-backend");
@@ -571,6 +579,8 @@
         "http://localhost:" + p
     ]);
     let backendBaseResolved = null;
+    const IS_DESKTOP = !!(window.pywebview && window.pywebview.api);
+    let desktopSelectedFilePath = null;
 
     function setFavicon(baseUrl) {
         try {
@@ -680,6 +690,10 @@
     });
 
     async function requestJson(path, options = {}) {
+        // 桌面版：不走 HTTP，不依赖端口
+        if (IS_DESKTOP) {
+            throw new Error("桌面模式不支持 HTTP 请求路径，请使用桌面 API。");
+        }
         if (!backendBaseResolved) {
             await probeBackend();
         }
@@ -737,6 +751,128 @@
             throw new Error(errorMessage);
         }
         return data;
+    }
+
+    async function desktopEnsureFile() {
+        if (desktopSelectedFilePath) return desktopSelectedFilePath;
+        throw new Error("请先点击“选择文件”");
+    }
+
+    async function desktopDetectSheets() {
+        const fp = await desktopEnsureFile();
+        const result = await window.pywebview.api.excel_sheets(fp);
+        sheetNameSelect.innerHTML = "";
+        if (result.sheets && result.sheets.length > 0) {
+            for (const sheet of result.sheets) {
+                const opt = document.createElement("option");
+                opt.value = sheet;
+                opt.textContent = sheet;
+                sheetNameSelect.appendChild(opt);
+            }
+            sheetRow.style.display = "flex";
+        } else {
+            sheetRow.style.display = "none";
+        }
+    }
+
+    async function desktopPreview() {
+        const fp = await desktopEnsureFile();
+        const sheet = sheetRow.style.display === "flex" ? sheetNameSelect.value : null;
+        const preview = await window.pywebview.api.preview_file(fp, sheet, 12);
+        previewMessage.textContent = "预览成功（前12行）";
+        renderPreviewTable(preview.columns, preview.rows);
+        renderColumnSelects(preview.columns);
+    }
+
+    async function desktopUpload() {
+        const fp = await desktopEnsureFile();
+        const name = document.getElementById("dataset-name").value.trim();
+        if (!name) throw new Error("请输入数据集名称");
+        const sheet = sheetRow.style.display === "flex" ? sheetNameSelect.value : null;
+        const result = await window.pywebview.api.upload_dataset(name, fp, sheet);
+        setText(uploadMessage, "上传成功: ID=" + result.id + ", 行数=" + result.rows + ", 列数=" + result.cols);
+        setCurrentDataset(result.id);
+        pendingFileNeedsUpload = false;
+        renderColumnSelects(result.columns);
+        await desktopLoadDatasets();
+    }
+
+    async function desktopLoadDatasets() {
+        const datasets = await window.pywebview.api.list_datasets();
+        datasetsTableBody.innerHTML = "";
+        if (!currentDatasetId && datasets.length > 0) {
+            setCurrentDataset(datasets[0].id);
+        }
+        for (const item of datasets) {
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+                "<td>" + item.id + "</td>" +
+                "<td>" + item.name + "</td>" +
+                "<td>" + item.rows + "</td>" +
+                "<td>" + item.cols + "</td>" +
+                "<td>" + item.columns.join(", ") + "</td>" +
+                "<td>" + item.created_at + "</td>";
+            datasetsTableBody.appendChild(tr);
+        }
+    }
+
+    async function desktopPlot(timeColumn, leftYColumns, rightYColumns) {
+        const params = {};
+        params.time_column = timeColumn;
+        params.left_y_columns = leftYColumns;
+        params.right_y_columns = rightYColumns;
+
+        const chartTitle = document.getElementById("fmt-title").value.trim();
+        if (chartTitle) params.chart_title = chartTitle;
+        const xTitle = document.getElementById("fmt-x-title").value.trim();
+        if (xTitle) params.x_title = xTitle;
+        const yLeftTitle = document.getElementById("fmt-y-left-title").value.trim();
+        if (yLeftTitle) params.y_left_title = yLeftTitle;
+        const yRightTitle = document.getElementById("fmt-y-right-title").value.trim();
+        if (yRightTitle) params.y_right_title = yRightTitle;
+
+        const xMin = document.getElementById("fmt-x-min").value.trim();
+        const xMax = document.getElementById("fmt-x-max").value.trim();
+        if (xMin && xMax) { params.x_min = xMin; params.x_max = xMax; }
+        else if (xMin || xMax) { throw new Error("时间轴下限与上限需同时填写或同时留空"); }
+
+        const xDtick = document.getElementById("fmt-x-dtick").value.trim();
+        if (xDtick !== "") {
+            const v = parseFloat(xDtick);
+            if (isNaN(v) || v <= 0) throw new Error("时间刻度间隔（小时）须为正数");
+            params.x_dtick_hours = v;
+        }
+
+        const ylMin = document.getElementById("fmt-y-left-min").value.trim();
+        const ylMax = document.getElementById("fmt-y-left-max").value.trim();
+        if (ylMin !== "" && ylMax !== "") { params.y_left_min = parseFloat(ylMin); params.y_left_max = parseFloat(ylMax); }
+        else if (ylMin || ylMax) { throw new Error("左 Y 轴下限与上限需同时填写或同时留空"); }
+
+        const ylDtick = document.getElementById("fmt-y-left-dtick").value.trim();
+        if (ylDtick !== "") {
+            const v = parseFloat(ylDtick);
+            if (isNaN(v) || v <= 0) throw new Error("左 Y 轴刻度间隔须为正数");
+            params.y_left_dtick = v;
+        }
+
+        const yrMin = document.getElementById("fmt-y-right-min").value.trim();
+        const yrMax = document.getElementById("fmt-y-right-max").value.trim();
+        if (yrMin !== "" && yrMax !== "") { params.y_right_min = parseFloat(yrMin); params.y_right_max = parseFloat(yrMax); }
+        else if (yrMin || yrMax) { throw new Error("右 Y 轴下限与上限需同时填写或同时留空"); }
+
+        const yrDtick = document.getElementById("fmt-y-right-dtick").value.trim();
+        if (yrDtick !== "") {
+            const v = parseFloat(yrDtick);
+            if (isNaN(v) || v <= 0) throw new Error("右 Y 轴刻度间隔须为正数");
+            params.y_right_dtick = v;
+        }
+
+        params.series_colors_json = JSON.stringify(buildSeriesColorMap());
+
+        const result = await window.pywebview.api.plot_time_dual_axis(currentDatasetId, params);
+        setText(plotMessage, "图表生成成功: " + result.output_path);
+        plotFrame.removeAttribute("src");
+        plotFrame.srcdoc = result.html;
     }
 
     function setText(el, text) {
@@ -950,14 +1086,18 @@
     uploadForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         uploadMessage.textContent = "正在上传...";
-        const formData = new FormData(uploadForm);
-        const file = datasetFileInput.files && datasetFileInput.files[0];
-        if (file && file.name.toLowerCase().endsWith(".xlsx") && sheetNameSelect.value) {
-            formData.set("sheet_name", sheetNameSelect.value);
-        } else {
-            formData.delete("sheet_name");
-        }
         try {
+            if (IS_DESKTOP) {
+                await desktopUpload();
+                return;
+            }
+            const formData = new FormData(uploadForm);
+            const file = datasetFileInput.files && datasetFileInput.files[0];
+            if (file && file.name.toLowerCase().endsWith(".xlsx") && sheetNameSelect.value) {
+                formData.set("sheet_name", sheetNameSelect.value);
+            } else {
+                formData.delete("sheet_name");
+            }
             const result = await requestJson("/datasets/upload", {
                 method: "POST",
                 body: formData,
@@ -973,6 +1113,7 @@
     });
 
     datasetFileInput.addEventListener("change", async () => {
+        if (IS_DESKTOP) return;
         pendingFileNeedsUpload = !!(datasetFileInput.files && datasetFileInput.files[0]);
         if (pendingFileNeedsUpload) {
             setCurrentDataset(null);
@@ -980,7 +1121,13 @@
         await detectExcelSheets();
         await previewCurrentFile();
     });
-    sheetNameSelect.addEventListener("change", previewCurrentFile);
+    sheetNameSelect.addEventListener("change", async () => {
+        if (IS_DESKTOP) {
+            await desktopPreview();
+            return;
+        }
+        await previewCurrentFile();
+    });
 
     refreshDatasetsBtn.addEventListener("click", loadDatasets);
 
@@ -1028,6 +1175,10 @@
             return;
         }
         try {
+            if (IS_DESKTOP) {
+                await desktopPlot(timeColumn, leftYColumns, rightYColumns);
+                return;
+            }
             const result = await requestJson(
                 "/analysis/" + currentDatasetId + "/plot/time-dual-axis?" + query.toString(),
                 { method: "POST" }
@@ -1040,26 +1191,54 @@
         }
     });
 
-    // 初始化：先用默认端口；首次成功请求后 requestJson 会固化正确端口
+    // 初始化：浏览器模式需要探测后端；桌面模式不需要
     apiBaseInput.value = DEFAULT_API_BASE;
     localStorage.setItem("api_base", DEFAULT_API_BASE);
     setFavicon(DEFAULT_API_BASE);
-    retryBackendBtn.addEventListener("click", probeBackend);
-    copyHealthBtn.addEventListener("click", async () => {
-        const base = backendBaseResolved || DEFAULT_API_BASE;
-        const text = base.replace(/\/$/, "") + "/health";
-        try {
-            await navigator.clipboard.writeText(text);
-            backendStatusExtra.textContent = "已复制：" + text;
-        } catch (e) {
-            backendStatusExtra.textContent = "复制失败，请手动复制：" + text;
-        }
-    });
+    if (!IS_DESKTOP) {
+        retryBackendBtn.addEventListener("click", probeBackend);
+        copyHealthBtn.addEventListener("click", async () => {
+            const base = backendBaseResolved || DEFAULT_API_BASE;
+            const text = base.replace(/\/$/, "") + "/health";
+            try {
+                await navigator.clipboard.writeText(text);
+                backendStatusExtra.textContent = "已复制：" + text;
+            } catch (e) {
+                backendStatusExtra.textContent = "复制失败，请手动复制：" + text;
+            }
+        });
+    }
 
-    probeBackend().then(() => {
-        loadDatasets();
-        renderSeriesColorSettings();
-    });
+    if (IS_DESKTOP) {
+        const backendStatusCard = document.getElementById("backend-status-card");
+        if (backendStatusCard) backendStatusCard.style.display = "none";
+        desktopFileRow.style.display = "flex";
+        datasetFileInput.closest(".row").style.display = "none";
+
+        pickFileBtn.addEventListener("click", async () => {
+            try {
+                const fp = await window.pywebview.api.pick_file();
+                if (!fp) return;
+                desktopSelectedFilePath = fp;
+                desktopFilePathSpan.textContent = fp;
+                pendingFileNeedsUpload = true;
+                setText(uploadMessage, "已选择新文件，请点击“上传”后再作图");
+                await desktopDetectSheets();
+                await desktopPreview();
+            } catch (e) {
+                setText(uploadMessage, "选择文件失败: " + (e && e.message ? e.message : String(e)));
+            }
+        });
+
+        desktopLoadDatasets().then(() => {
+            renderSeriesColorSettings();
+        });
+    } else {
+        probeBackend().then(() => {
+            loadDatasets();
+            renderSeriesColorSettings();
+        });
+    }
 </script>
 </body>
 </html>

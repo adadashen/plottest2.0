@@ -41,6 +41,9 @@ jobs:
             Write-Error "Spec file not found: packaging\\windows\\plotbunny.spec"
             exit 1
           }
+          Write-Host "=== Head of plotbunny.spec ==="
+          Get-Content packaging\\windows\\plotbunny.spec -TotalCount 40
+          Write-Host "=== End head ==="
 
       - name: Build (PyInstaller onefile, no console)
         run: |

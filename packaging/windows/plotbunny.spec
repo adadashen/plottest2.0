@@ -3,13 +3,14 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-project_root = Path(__file__).resolve().parents[2]
+# 在部分 CI 环境中 spec 执行时可能没有 __file__，因此基于当前工作目录（仓库根目录）定位
+project_root = Path.cwd().resolve()
 
 datas = [
     (str(project_root / "app" / "templates"), "app/templates"),
     (str(project_root / "app" / "static"), "app/static"),
     # 可选独立页（不是桌面主入口，但一起带上便于调试/分发）
-    (str(project_root / "Plot Bunny.html"), "Plot Bunny.html"),
+    (str(project_root / "Plot Bunny.html"), "."),
 ]
 
 # 让 pywebview 在 onefile 下稳定工作：收集子模块与数据文件
